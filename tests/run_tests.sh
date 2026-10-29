@@ -195,6 +195,11 @@
 #                   noise, the echo (FIR, feedback); its rate countdowns against the original's counter; the presets in the
 #                   mix (peak, clipping, voices freed, the echo idle), the pitch register; the part's engine memory shared
 #                   with PHYS (either engine after the other = from boot); demos in build/adpcm_demo/.
+# FEXT (tests/fext_test.c, MPL-2.0): the socket for an fext module (FELUCCA_FEXT=1, off by default: src/fext.h, fext_load.h,
+#                   fext_host.h): the loader's check of a module made for Felucca's slot and windows and of what it must
+#                   refuse, the write frames' decoder, the module's texts folded to the font's ASCII. FEXT_MODULE=IMG
+#                   [FEXT_FRAMES=F]: a real module moved to the slot (fext_push.py) and its frames too. The default build
+#                   holds none of it.
 # Change baseline entries only for reviewed, intentional differences in sound or cost;
 # retain every unaffected golden / CPU / target entry. VERBOSE=1: every render.
 set -e
@@ -272,6 +277,16 @@ head -c 200000 build/felucca.bin > "$OUT/old_app.bin"
 python3 tools/fm1pkg_make.py "$OUT/old_app.bin" build/loader/ota.bin "$OUT/old.fwsc" >/dev/null
 $CC -o "$OUT/ldr_test" tests/ldr_test.c
 run "update loader: other app -> this build" "$OUT/ldr_test" "$OUT/old.fwsc" build/felucca.fwsc
+
+$CC -Wno-unused-variable -Ifirmware/src -o "$OUT/fext_test" tests/fext_test.c
+if [ -n "$FEXT_MODULE" ]; then
+    run "fext socket: checks, frames, a real module moved to Felucca's slot" "$OUT/fext_test" "$FEXT_MODULE" $FEXT_FRAMES
+else
+    run "fext socket: checks, frames (no module image in \$FEXT_MODULE)" "$OUT/fext_test"
+fi
+fext_in_app() { ${CC%% *} -E -DFELUCCA_FEXT=1 -Ibuild/gen $HALI firmware/src/felucca.c 2>/dev/null | grep -q fext_service &&
+    ! ${CC%% *} -E -Ibuild/gen $HALI firmware/src/felucca.c 2>/dev/null | grep -q fext_service; }
+run "fext socket: only in the FELUCCA_FEXT build" fext_in_app
 
 if [ -f build/gen/felucca_tables.h ]; then
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/hostsim" tests/hostsim.c -lm

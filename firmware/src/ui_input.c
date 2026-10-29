@@ -948,6 +948,12 @@ static void edit_param(uint32_t slot, int32_t steps)
         ev_knob(slot, steps);
         return;
     }
+#if FELUCCA_FEXT
+    if (pg->graph == GR_EXT || pg->graph == GR_EXT2) {    /* the module's pages (fext_host.c) */
+        fext_knob(pg->graph == GR_EXT2, slot, steps);
+        return;
+    }
+#endif
     if (pg->graph == GR_SONG) {                       /* KNOB 1 SECTION, 2 TRACK, 3 PAT (A..D, -), 4 REPS */
         chain_row_t *r;
         if (slot == 0u) {
@@ -1795,7 +1801,11 @@ static void ui_input(void)
         }
         if (ui.home || pg->scope == SC_STEP || pg->scope == SC_TRK || page_desc(pg, k, &hv) ||
             ((pg->graph == GR_USER || pg->graph == GR_MOD || pg->graph == GR_PATS) && k == 0u)
-            || pg->graph == GR_SONG || (pg->graph == GR_SLICES && k < 2u) || fop_page(pg->graph)) {   /* (not an empty
+            || pg->graph == GR_SONG || (pg->graph == GR_SLICES && k < 2u) || fop_page(pg->graph)
+#if FELUCCA_FEXT
+            || ((pg->graph == GR_EXT || pg->graph == GR_EXT2) && fext_col_used(pg->graph == GR_EXT2, k))
+#endif
+            ) {                                                                                           /* (not an empty
                                                                                                           * column) */
             ui.hot_col = (uint8_t)k;
             ui.hot_t = 40;

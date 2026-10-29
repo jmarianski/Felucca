@@ -81,6 +81,7 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`, `c
 | `FELUCCA_ICONS` | 1 | parameter icons on the knob cards |
 | `FELUCCA_FM4` | 0 | the retired DIGITAL engine (4-operator FM) instead of its FM6 conversion |
 | `FELUCCA_ADPCM` | 0 | the ADPCM engine (engine 14, `firmware/src/eng_adpcm.c`): kept in the tree, not built by default. On the FM-1 one of its voices costs about three ANALOG voices (8 voices on one part: 54 % CPU, against 17 % for ANALOG; on all four parts the audio drops out); the figures are in `eng_adpcm.c` |
+| `FELUCCA_FEXT` | 0 | the socket for an fext module (`firmware/src/fext.h`, `fext_host.c`; needs `FELUCCA_OTA`): a separate program installed over USB-MIDI into its own flash slot (0xE8000, 80 KiB) by an installer (`fext_push.py`), loaded at every start, with two pages after GLO's SONG and the knobs' columns. Linked with `build/app_fext.ld` (`app.ld` with the module's RAM windows, `firmware/src/fext_host.h`); the package is `build/felucca-fext.fwsc` |
 
 `FELUCCA_USB_LAYOUT` (`0` to `3`, default `0`) picks other USB descriptor layouts for testing; see
 `firmware/src/usb.c`.

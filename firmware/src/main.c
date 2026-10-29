@@ -141,6 +141,10 @@ static void fm1_main(void)
         fm1_cpu1_start();
     }
 #endif
+#if FELUCCA_FEXT
+    fext_boot();                                /* the fext module: checked and loaded after fm1_cpu1_start (it sets
+                                                 * the guard's code windows again); its radio starts in the main loop */
+#endif
     audio_init();
     usb_start();
 #if FELUCCA_UART
@@ -220,6 +224,10 @@ static void fm1_main(void)
         }
 #if FELUCCA_OTA
         ed_service();                                   /* web editor SysEx */
+#if FELUCCA_FEXT
+        fext_sysex();                                   /* the fext module's SysEx ("FB", "LG"), then its poll */
+        fext_service();
+#endif
         ota_service();                                  /* M-UPGRADE handshake */
         if (usb.ota_req) {                              /* M-UPGRADE upgrade command */
             usb.ota_req = 0;
@@ -261,6 +269,10 @@ static void fm1_main(void)
 #if FELUCCA_OTA
             ed_service();                       /* editor replies without waiting for the next frame */
 #endif
+#if FELUCCA_FEXT
+            fext_sysex();
+            fext_service();                     /* (its MIDI and its radio: polled while the frame waits too) */
+#endif
         }
     }
 }
@@ -274,6 +286,12 @@ void fm1_cstart(void)
                                                 * cleared below */
 #endif
     fm1_time_init();
+#if FELUCCA_FEXT
+    fm1_vdc14_raise(7);                         /* M-VAVE's own power setup, as MIDIMON (fm1-base) and SLOOP's socket: */
+    fm1_sysvdd_raise(15);                       /* VDC14 1.60 V, SYSVDD 1.38 V, then the 1.3 V supply on its DC-DC; */
+    fext_power_fix = (int8_t)fm1_power_stock(); /* on the boot loader's linear 1.3 V, a radio's calibration draws a
+                                                 * current that faults the bus at random (bsp/chip/fm1_sys.h) */
+#endif
     fm1_reset_reason();
     p3 = fm1_boot.p3_rst;
     src = fm1_boot.rst_src;
@@ -302,6 +320,11 @@ void fm1_cstart(void)
     for (s = _rt_load, d = _rt_start; d < _rt_end; s++, d++)
         *d = *s;                                /* flash driver code that must run from RAM, then the second core's
                                                  * waiting loop (.c1_text, app.ld) */
+#if FELUCCA_FEXT
+    fext_clock_fix = (int8_t)fm1_clock_stock(); /* M-VAVE's own clock (as MIDIMON): under m-bootloader the system clock
+                                                 * is not on PLL1, and a radio's calibration (the JieLi libraries)
+                                                 * then breaks the bus while it trims (bsp/chip/fm1_clock.h) */
+#endif
     fm1_mailbox_clear();
     fm1_guard_enable(FM1_GUARD_STACK | FM1_GUARD_WRITE | FM1_GUARD_BUS | FM1_GUARD_PC);
     fm1_boot.p3_rst = (uint8_t)p3;

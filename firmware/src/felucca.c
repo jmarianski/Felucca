@@ -50,8 +50,15 @@
 #ifndef FELUCCA_VERSION
 #define FELUCCA_VERSION "v1.7.0" /* shown in the menu, the console and the editor; build.py --release X.Y */
 #endif
+#ifndef FELUCCA_FEXT
+#define FELUCCA_FEXT 0           /* the socket for an fext module (fext_host.c, MPL-2.0; build.py --fext: its own
+                                  * memory map, app_fext.ld.in) */
+#endif
 #if FELUCCA_OTA && !FELUCCA_FLASH
 #error "FELUCCA_OTA needs FELUCCA_FLASH"
+#endif
+#if FELUCCA_FEXT && !FELUCCA_OTA
+#error "FELUCCA_FEXT needs FELUCCA_OTA and FELUCCA_FLASH (its SysEx, its flash)"
 #endif
 
 /* ------------------------------------------------------------- HAL --- */
@@ -60,6 +67,9 @@
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+#if FELUCCA_FEXT
+#include "fm1_clock.h"     /* fm1_clock_stock: the stock 360 MHz on PLL1 (a radio's calibration needs it; main.c) */
+#endif
 #if FELUCCA_CPU2
 #include "fm1_cpu1.h"
 #define C1_ON() fm1_cpu1_on                  /* fx.c mix_block: a second core is answering */
@@ -82,6 +92,9 @@ static __attribute__((noinline)) int c1_wait(void) { return fm1_cpu1_wait(); }  
 
 /* ----------------------------------------------------------- sound --- */
 #include "core.h"
+#if FELUCCA_FEXT
+#include "fext_host.h"         /* (before params.c and the USB driver: the module's pages, its MIDI out) */
+#endif
 #include "engines.c"             /* dsp.c, the eng_*.c files, the factory patterns */
 #include "params.c"
 #include "mod.c"               /* the modulation matrix, used by voice.c and fx.c */
@@ -121,6 +134,11 @@ static __attribute__((noinline)) int c1_wait(void) { return fm1_cpu1_wait(); }  
 #include "../bsp/chip/ota.c"
 #include "ota_hw.c"
 #include "editor.c"              /* web editor SysEx (needs the OTA SysEx plumbing) */
+#endif
+#if FELUCCA_FEXT
+#include "fext_load.h"
+#include "fext_text.h"           /* the module's texts as the fonts draw them (MPL-2.0) */
+#include "fext_host.c"           /* an fext module: loader, host services, SysEx "FB", its GLO pages (MPL-2.0) */
 #endif
 #if FELUCCA_CDC
 #include "console.c"

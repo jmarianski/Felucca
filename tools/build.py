@@ -55,6 +55,9 @@ VERSION = None                      # FELUCCA_VERSION for release builds (defaul
 # stacks (firmware/bsp/chip/fm1_cpu1.S) linked and its waiting loop (.c1_text) checked; MENU > SYSTEM > 2ND CORE starts it
 # (OFF by default: one core, as 1.6). FELUCCA_CPU2=0: none of it is built (1.6's one-core code and RAM)
 CPU2 = os.environ.get("FELUCCA_CPU2") != "0"
+# FELUCCA_FEXT=1 (firmware/src/felucca.c, needs FELUCCA_OTA): the module socket (firmware/src/fext_host.c). Linked
+# with build/app_fext.ld: app.ld with the module's windows (firmware/src/fext_host.h) at RAM's bottom, RAM and the pool moved up
+FEXT = os.environ.get("FELUCCA_FEXT") == "1"
 
 
 def toolchain():
@@ -191,11 +194,40 @@ def build_loader():
 
 # ---- app
 
-def ld_regions():
-    """firmware/app.ld's MEMORY regions: name -> (origin, length)"""
+def app_ld():
+    """the linker script: firmware/app.ld, or for FELUCCA_FEXT=1 build/app_fext.ld written from it"""
+    if not FEXT:
+        return FW / "app.ld"
+    w = {m[1]: int(m[2], 0) for m in re.finditer(r"^#define\s+FEXT_(\w+_(?:LO|HI))\s+(0x[0-9A-Fa-f]+)u",
+                                                    (FW / "src" / "fext_host.h").read_text(), re.M)}
+    ld = (FW / "app.ld").read_text()
+    regs = ld_regions(ld)
+    ram_org, ram_len = regs["RAM"]
+    pool_org, pool_len = regs["POOL"]
+    # DMA, then RAM: the RAM region's bottom (a radio's DMA reaches only low RAM); RAM and the pool move up by them
+    if w["DMA_LO"] != ram_org or w["RAM_LO"] != w["DMA_HI"]:
+        raise SystemExit("fext_host.h: the DMA window must be app.ld's RAM bottom, the RAM window right above it")
+    if not (regs["RAMTEXT"][0] + regs["RAMTEXT"][1] <= w["CODE_LO"] < w["CODE_HI"] <= ram_org):
+        raise SystemExit("fext_host.h: the CODE window is not between RAMTEXT and RAM")
+    cut = w["RAM_HI"] - ram_org
+    ld = re.sub(r"^(\s*RAM\s+\(rwx\)\s*:\s*ORIGIN\s*=\s*)\w+", lambda m: m[1] + f"{w['RAM_HI']:#010x}", ld, 1, re.M)
+    ld = re.sub(r"^(\s*POOL\s+\(rw\)\s*:\s*ORIGIN\s*=\s*)\w+,\s*LENGTH\s*=\s*\w+",
+                lambda m: m[1] + f"{pool_org + cut:#010x}, LENGTH = {pool_len - cut:#x}", ld, 1, re.M)
+    ld = re.sub(r"^(\s*\.bss \(NOLOAD\).*\n)",
+                lambda m: m[1] + "    .fext_log (NOLOAD) : { . = ALIGN(4); *(.fext_log*) . = ALIGN(4); _fext_log_end = .; } > RAM\n", ld, 1, re.M)
+    ld = ld.replace("SECTIONS\n{", "SECTIONS\n{\n" + "".join(
+        f"    _fext_{k.lower()} = {v:#010x};\n" for k, v in sorted(w.items())), 1)
+    ld = "/* build/app_fext.ld: written by tools/build.py from firmware/app.ld and firmware/src/fext_host.h */\n" + ld
+    out = OUT / "app_fext.ld"
+    out.write_text(ld)
+    return out
+
+
+def ld_regions(text=None):
+    """the linker script's MEMORY regions: name -> (origin, length)"""
     regs = {}
     for m in re.finditer(r"^\s*(\w+)\s*\([rwx]+\)\s*:\s*ORIGIN\s*=\s*(\w+),\s*LENGTH\s*=\s*(\w+)",
-                         (FW / "app.ld").read_text(), re.M):
+                         text if text is not None else app_ld().read_text(), re.M):
         n = m.group(3)
         regs[m.group(1)] = (int(m.group(2), 0), int(n[:-1], 0) * 1024 if n.endswith("K") else int(n, 0))
     return regs
@@ -205,7 +237,7 @@ def build_app():
     flags = [*CFLAGS, *HAL_INC, "-Ifirmware/src", "-Ibuild/gen"]
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_UAC_48K", "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_FM4",
-                 "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2", "FELUCCA_ADPCM"):
+                 "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2", "FELUCCA_ADPCM", "FELUCCA_FEXT"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
@@ -233,7 +265,7 @@ def build_app():
         tc("cc", *[f for f in flags if not f.startswith(("-I", "-D", "-W"))], "-c",
            OUT / "felucca_size.ll", "-o", OUT / "felucca.o")
     elf = OUT / "felucca.elf"
-    tc("pi32v2/bin/ld", "-T", FW / "app.ld", OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
+    tc("pi32v2/bin/ld", "-T", app_ld(), OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
        *([OUT / "fm1_cpu1.o"] if CPU2 else []), OUT / "felucca.o", "-o", elf)
     for sect in ("text.bin", "data.bin", "ramtext.bin", "c1text.bin"):   # (c1text.bin: before the BSP, its own section)
         (OUT / sect).unlink(missing_ok=True)
@@ -327,10 +359,17 @@ def check(img, syms, dis, rt):
     region = ld_regions()
     ram_org, ram_len = region["RAM"]
     pool_len = region["POOL"][1]
-    bss = sym("_bss_end") - ram_org
+    bss = max(sym("_bss_end"), sym("_fext_log_end")) - ram_org     # (.fext_log: FELUCCA_FEXT=1, after .bss)
     pool = sym("_pool_end") - sym("_pool_start")
     notes.append(f"image {len(img)} B; RAM .data+.bss {bss} B of {ram_len}; pool {pool} B of {pool_len}")
-    if region["RAM"][0] + ram_len != region["POOL"][0]:
+    if FEXT:
+        if sym("_fext_ram_hi") != region["RAM"][0] or region["RAM"][0] + ram_len != region["POOL"][0]:
+            errors.append("app_fext.ld: RAM does not start where the module's RAM window ends, or POOL where RAM ends")
+        if sym("_rt_end") > sym("_fext_code_lo"):
+            errors.append(f".ram_text ends at {sym('_rt_end'):#x}, in the module's CODE window")
+        notes.append(f"fext: CODE {sym('_fext_code_lo'):#x}, DMA {sym('_fext_dma_lo'):#x}, "
+                     f"RAM {sym('_fext_ram_lo'):#x}; .ram_text ends {sym('_rt_end'):#x}")
+    elif region["RAM"][0] + ram_len != region["POOL"][0]:
         errors.append("app.ld: POOL does not start where RAM ends")
     if ram_len - bss < 4096:                      # keep >= 4 KiB of .bss spare (state the audio side touches)
         errors.append(f"RAM headroom {ram_len - bss} B < 4096 B")
@@ -398,6 +437,8 @@ def main():
         PRODUCT = "FM-1_9" + m[1] + m[2]
         VERSION = "v" + a.release.lower()      # e.g. v1.0, v1.1-rc1
         name = f"felucca-{a.release}.fwsc"
+    if FEXT:                        # the module socket: its own package name
+        name = name.replace(".fwsc", "-fext.fwsc")
     if not (FW / "engines" / "src" / "felucca_engine.h").exists():
         raise SystemExit("firmware/engines is empty: the Felucca-Engines submodule "
                          "(git submodule update --init, or clone with --recurse-submodules)")

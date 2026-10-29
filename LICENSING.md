@@ -11,10 +11,11 @@ Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 
 Every file in this tree that carries an `SPDX-License-Identifier: GPL-3.0-only` header:
 
-- the firmware: `firmware/` (app, update loader, `firmware/hal/`; not `firmware/engines/`, MIT, nor `firmware/bsp/`, MPL-2.0: below)
+- the firmware: `firmware/` (app, update loader, `firmware/hal/`; not `firmware/engines/`, MIT, nor `firmware/bsp/`, MPL-2.0,
+  nor the module socket's files `firmware/src/fext*`, MPL-2.0: below)
 - the build script and tools: `build.sh`, `tools/` (not `tools/gen_waves.py`, the Hügelton Sample Pack: CC0 1.0, below)
 - the web pages (installer, editor, the browser emulator `web/emu/`) and their tests: `web/` (not the Fukiai and DotGothic16 fonts, below)
-- the host tests: `tests/`
+- the host tests: `tests/` (not `tests/fext_test.c`, MPL-2.0: below)
 
 Four source files are ports and keep the licence of their originals:
 `firmware/src/phys_dsp.c` (DaisySP, MIT), `firmware/src/phys_symp.c` (Rings, MIT),
@@ -101,6 +102,19 @@ Every distribution of a package carries the licence texts with it: the release f
 (`tools/build.py --release`) and the site (`web/make_site.py`, next to the package in
 `firmware/` and linked from the installer page).
 
+## The module socket (MPL-2.0)
+
+The socket for an fext module (built only with `FELUCCA_FEXT=1`, off by default) is under the Mozilla Public
+License 2.0, not the GPL: `firmware/src/fext.h` (the module ABI), `fext_load.h` (the loader's check), `fext_text.h`,
+`fext_host.h`, `fext_host.c` and its test `tests/fext_test.c` (`SPDX-License-Identifier: MPL-2.0`, Copyright (C) 2026
+Jacek Mariański; the licence text is felucca-bsp's, `LICENSES/MPL-2.0-felucca-bsp.txt`). The firmware built with them
+is GPL-3.0-only as a whole; the MPL files stay MPL-2.0, as felucca-bsp's do.
+
+A module is a separate program: its own image, installed into its own flash slot by `fext_push.py` (not part of
+Felucca's packages), loaded at run time and reached only through the ABI in `fext.h`. It keeps its own licence and
+its own source; Felucca's packages hold none of a module. `fext.h` being MPL-2.0 lets a module under any licence
+use the ABI.
+
 ## No vendor material
 
 No M-VAVE material is part of Felucca. The firmware links no vendor code and contains no vendor
@@ -124,4 +138,5 @@ by those owners.
 
 ## Radio
 
-Felucca never enables the Bluetooth / Wi-Fi radio of the hardware.
+Felucca never enables the Bluetooth / Wi-Fi radio of the hardware. A module installed into a `FELUCCA_FEXT=1` build may (a Bluetooth MIDI module
+does): that is the module's, under its author's responsibility, not Felucca's.

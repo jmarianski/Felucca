@@ -1203,6 +1203,10 @@ static uint32_t graph_signature(void)
             h = (h ^ chord_last[song.sel].note[i]) * 16777619u;
         h ^= (uint32_t)t->engine * 389u;             /* (MONO and kits follow the sounding engine) */
     }
+#if FELUCCA_FEXT
+    if (pg->graph == GR_EXT || pg->graph == GR_EXT2)  /* the module's lines */
+        h ^= fext_graph_sig(pg->graph == GR_EXT2);
+#endif
     if (pg->graph == GR_SONG) {
         h ^= ui.song_row * 40503u + chain_config.count * 7919u + ui.song_trk * 3571u;
         h = fnv(h, chain_config.row, sizeof chain_config.row);
@@ -2330,6 +2334,13 @@ static void draw_graph(void)
             cv_oy = 0;
             panel_note("TURN TO PICK", "[OCT+] CONFIRM", 0);
             break;
+#if FELUCCA_FEXT
+        case GR_EXT:
+        case GR_EXT2:
+            cv_oy = 0;
+            fext_graph(pg->graph == GR_EXT2);
+            break;
+#endif
 #if FELUCCA_SLICE
         case GR_SLICES:
             cv_oy = 0;
