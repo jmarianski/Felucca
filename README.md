@@ -1,5 +1,13 @@
 # Felucca
 
+> **Archived fork.** This fork of [Felucca](https://github.com/hugelton/Felucca) carries one experiment: *fext*, a
+> generic socket through which the firmware loads a module flashed on its own (ABI 1.0, `firmware/src/fext*`), made for
+> [fble](https://github.com/jmarianski/fble), a Bluetooth MIDI module. Build it with `FELUCCA_FEXT=1 tools/build.py`;
+> the chip side is in [jmarianski/felucca-bsp](https://github.com/jmarianski/felucca-bsp). It is not maintained.
+> Bluetooth MIDI on the FM-1 is now done by an open stack with no vendor libraries, in
+> [Optimist](https://github.com/w0ts/optimist) and [fm1-base](https://github.com/charlesvestal/fm1-base). For anything
+> else use the upstream Felucca.
+
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
 ## Maintenance Notice
